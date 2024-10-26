@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Jogos Lotofácil</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Gerador de Jogos Lotofácil</h2>
+    <div class="card">
+        <div class="card-body">
+            <form id="lotofacilForm">
+                <div class="form-group">
+                    <label for="csvFile">Carregar arquivo CSV com resultados anteriores:</label>
+                    <input type="file" id="csvFile" class="form-control-file" accept=".csv">
+                </div>
+                <div class="form-group">
+                    <label for="numJogos">Número de Jogos:</label>
+                    <input type="number" id="numJogos" class="form-control" min="1" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="numAposta">Quantidade de Números por Jogo:</label>
+                    <input type="number" id="numAposta" class="form-control" min="15" max="20" value="15">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="gerarJogos()">Gerar Jogos</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <h3>Jogos Gerados</h3>
+        <ul id="resultados" class="list-group"></ul>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script>
+    let historicoResultados = [];
+
+    // Função para carregar o CSV e armazenar os resultados
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        Papa.parse(file, {
+            complete: function(results) {
+                historicoResultados = results.data.slice(1).map(row => row.slice(2).map(Number));
+                alert('Arquivo carregado com sucesso!');
+            }
+        });
+    });
+
+    function gerarJogos() {
+        const numJogos = parseInt(document.getElementById('numJogos').value);
+        const numAposta = parseInt(document.getElementById('numAposta').value);
+
+        let jogos = [];
+        for (let i = 0; i < numJogos; i++) {
+            const jogo = gerarNumerosAposta(numAposta);
+            jogos.push(jogo);
+        }
+        
+        mostrarResultados(jogos);
+    }
+
+    function gerarNumerosAposta(numAposta) {
+        let pool = criaPoolNumeros();
+        let numeros = sorteiaNumeros(pool,numAposta)
+        // Ordena números em ordem crescente
+        numeros.sort((a, b) => a - b);
+        console.log(`Sorteados antes de ajuste:${numeros}`);
+
+        numeros = ajustarDiferencas(numeros, pool);
+
+        return numeros;
+    }
+
+    function sorteiaNumeros(pool,numAposta){
+        let numeros = [];
+        let pares = 0;
+        let impares = 0;
+
+        while (numeros.length < numAposta) {
+            let indicePool = Math.floor(Math.random() * pool.length);
+            console.log(`indice:${indicePool}`);
+            let num = pool[indicePool];
+            console.log(`num:${num}`);
+            const ultimoNumero = numeros[numeros.length - 1];
+            console.log(`Numeros:${numeros.length}`);
+            console.log(`Pool: ${pool}`);
+            // Verifica duplicatas, diferença máxima de 4 e até 5 consecutivos            
+            if (!numeros.includes(num) && !verificaConsecutivos(numeros,num,numAposta)) {
+
+                // Incrementa contadores de pares e ímpares
+                if (num % 2 === 0) {
+                    pares++;
+                } else {
+                    impares++;
+                }
+                
+                // Adiciona o número e remove do pool
+                console.log(`Adciiona ${num}`);
+                numeros.push(num);
+                pool.splice(indicePool, 1);
+                            }
+        }
+
+        // Estratégias adicionais (pares/ímpares, altos/baixos)
+        if (pares < 7 || impares < 7) {
+            let diferenca = pares - impares;
+            if (diferenca > 0) { // Mais pares, adiciona ímpar
+                let imparPool = pool.filter(n => n % 2 !== 0);
+                numeros.push(imparPool[Math.floor(Math.random() * imparPool.length)]);
+            } else if (diferenca < 0) { // Mais ímpares, adiciona par
+                let parPool = pool.filter(n => n % 2 === 0);
+                numeros.push(parPool[Math.floor(Math.random() * parPool.length)]);
+            }
+        }
+        return numeros;
+    }
+
+    function ajustarDiferencas(numerosSorteados, pool) {
+        for (let i = 0; i < numerosSorteados.length - 1; i++) {
+            const diferenca = numerosSorteados[i + 1] - numerosSorteados[i];
+
+            // Se a diferença entre números consecutivos for maior que 4, corrige o problema
+            if (diferenca > 4) {
+                let numeroParaSubstituir;
+                let indiceParaSubstituir;
+                let novoNumero;
+
+                // Identifica o número com problema e determina se deve substituir o atual ou o próximo
+                if (Math.abs(numerosSorteados[i + 1] - numerosSorteados[i]) > 4) {
+                    // Escolhe o número que está mais distante dos vizinhos
+                    if (Math.abs(numerosSorteados[i + 1] - numerosSorteados[i]) > 4) {
+                        numeroParaSubstituir = numerosSorteados[i];
+                        indiceParaSubstituir = i;
+                    } else {
+                        numeroParaSubstituir = numerosSorteados[i + 1];
+                        indiceParaSubstituir = i + 1;
+                    }
+                    
+                    // Encontra o número mais próximo no pool
+                    novoNumero = pool.reduce((prev, curr) => 
+                        Math.abs(curr - numeroParaSubstituir) < Math.abs(prev - numeroParaSubstituir) ? curr : prev
+                    );
+
+                    // Verifica se o número selecionado resolve a diferença
+                    if (
+                        (indiceParaSubstituir > 0 && Math.abs(numerosSorteados[indiceParaSubstituir - 1] - novoNumero) <= 4) &&
+                        (indiceParaSubstituir < numerosSorteados.length - 1 && Math.abs(numerosSorteados[indiceParaSubstituir + 1] - novoNumero) <= 4)
+                    ) {
+                        // Realiza a substituição
+                        pool.splice(pool.indexOf(novoNumero), 1);
+                        pool.push(numeroParaSubstituir);
+                        console.log(`troca ${numerosSorteados[indiceParaSubstituir]} por ${novoNumero}`);
+                        numerosSorteados[indiceParaSubstituir] = novoNumero;
+
+                        // Reordena o array de sorteados
+                        numerosSorteados.sort((a, b) => a - b);
+                    }
+                }
+            }
+        }
+        return numerosSorteados;
+    }
+
+    function mostrarResultados(jogos) {
+        const resultados = document.getElementById('resultados');
+        resultados.innerHTML = '';
+        jogos.forEach((jogo, index) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.textContent = `Jogo ${index + 1}: ${jogo.join(', ')}`;
+            resultados.appendChild(li);
+        });
+    }
+
+    function criaPoolNumeros() {
+        let pool = [];
+        for (let i = 1; i <= 25; i++) {
+            pool.push(i);
+        }
+        return pool;
+    }
+
+    function verificaConsecutivos(array, numero, numAposta) {
+        // Adiciona o número ao array
+        let aux = Array.from(array);
+        aux.push(numero);
+
+        let maxConsecutivos =5;
+        if(numAposta>15){
+            maxConsecutivos = 6;
+        }
+        if(numAposta>16){
+            maxConsecutivos = 7;
+        }
+
+        // Remove duplicatas e ordena o array
+        const arrayOrdenado = Array.from(new Set(aux)).sort((a, b) => a - b);
+
+        // Verifica se existem {maxConsecutivos} números consecutivos
+        let contadorConsecutivos = 1;
+        for (let i = 1; i < arrayOrdenado.length; i++) {
+            if (arrayOrdenado[i] === arrayOrdenado[i - 1] + 1) {
+                contadorConsecutivos++;
+                if (contadorConsecutivos === maxConsecutivos) {
+                    console.log(`encontrou ${maxConsecutivos} consecutivos para ${numero}`);
+                    return true; // Encontrou 5 números consecutivos
+                }
+            } else {
+                contadorConsecutivos = 1; // Reinicia o contador
+            }
+        }
+        console.log(`sem ${maxConsecutivos} consecutivos para ${numero}`);
+        return false; // Não encontrou 5 números consecutivos
+    }
+
+    function verificaDiferencaMax(array, numero) {
+        // Adiciona o número ao array
+        let aux = Array.from(array);
+        aux.push(numero);
+
+        // Remove duplicatas e ordena o array
+        const arrayOrdenado = Array.from(new Set(aux)).sort((a, b) => a - b);
+
+        // Verifica se existem 5 números consecutivos
+        let contadorConsecutivos = 1;
+        for (let i = 1; i < arrayOrdenado.length; i++) {
+            if (arrayOrdenado[i] === arrayOrdenado[i - 1] + 1) {
+                contadorConsecutivos++;
+                if (contadorConsecutivos === 5) {
+                    console.log(`encontrou 5 consecutivos para ${numero}`);
+                    return true; // Encontrou 5 números consecutivos
+                }
+            } else {
+                contadorConsecutivos = 1; // Reinicia o contador
+            }
+        }
+        console.log(`sem 5 consecutivos para ${numero}`);
+        return false; // Não encontrou 5 números consecutivos
+    }
+</script>
+
+</body>
+</html>
