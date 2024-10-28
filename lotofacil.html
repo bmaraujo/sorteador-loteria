@@ -39,17 +39,59 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 <script>
     let historicoResultados = [];
+    let estatisticas = {
+        totalJogos:0,
+        numeros: new Map()
+    };
 
     // Função para carregar o CSV e armazenar os resultados
     document.getElementById('csvFile').addEventListener('change', function(e) {
         const file = e.target.files[0];
         Papa.parse(file, {
             complete: function(results) {
-                historicoResultados = results.data.slice(1).map(row => row.slice(2).map(Number));
+                console.log(results);
+                for(let i=0; i < results.data.length;i++){
+                    historicoResultados.push(results.data[i]);
+                    estatisticas = gerarEstatisticas(estatisticas,results.data[i]);
+                }
                 alert('Arquivo carregado com sucesso!');
+                console.log(historicoResultados);
+                console.log(estatisticas);
+
+                console.log(numerosMaisSorteados(estatisticas.numeros,11));
             }
         });
     });
+
+    function gerarEstatisticas(estatisticas, entry){
+        estatisticas.totalJogos++;
+        for(let i =2; i < entry.length;i++){
+            if(estatisticas.numeros){
+                if(estatisticas.numeros.has(entry[i])){
+                    estatisticas.numeros.set(entry[i],estatisticas.numeros.get(entry[i])+1);
+                }
+                else{
+                    estatisticas.numeros.set(entry[i],1)
+                }
+            }
+        }
+        return estatisticas;
+    }
+
+    function numerosMaisSorteados(map, quantidade) {
+        // Converte o Map para um array de pares [numero, vezesSorteado]
+        const arraySorteios = Array.from(map.entries());
+
+        // Ordena o array com base na quantidade de sorteios (valor)
+        arraySorteios.sort((a, b) => b[1] - a[1]);
+
+        console.log(`sorteados:${arraySorteios}`);
+
+        // Extrai as chaves (números) dos primeiros 'quantidade' elementos
+        const numerosMaisFrequentes = arraySorteios.slice(0, quantidade).map(par => par[0]);
+
+        return numerosMaisFrequentes;
+    }
 
     function gerarJogos() {
         const numJogos = parseInt(document.getElementById('numJogos').value);
@@ -66,7 +108,20 @@
 
     function gerarNumerosAposta(numAposta) {
         let pool = criaPoolNumeros();
-        let numeros = sorteiaNumeros(pool,numAposta)
+
+        let qtdComuns = 11;
+
+        //adiciona numeros mais comuns
+        let comuns = numerosMaisSorteados(estatisticas.numeros,qtdComuns)
+        console.log(`comuns:${comuns}`);
+        console.log(pool);
+        //remove do pool os comuns
+        pool = filtraPool(pool,comuns);
+        console.log(pool);
+
+        let numeros = sorteiaNumeros(comuns, pool,numAposta);
+
+        numeros.concat(comuns);
         // Ordena números em ordem crescente
         numeros.sort((a, b) => a - b);
         console.log(`Sorteados antes de ajuste:${numeros}`);
@@ -76,12 +131,22 @@
         return numeros;
     }
 
-    function sorteiaNumeros(pool,numAposta){
-        let numeros = [];
+    function filtraPool(pool, numerosSelecionados) {
+
+        const poolNumeros = pool.map(Number);
+        const numerosSelecionadosSet = new Set(numerosSelecionados.map(Number));
+
+        // Retorna um novo pool com apenas números não presentes no conjunto numerosSelecionados
+        return poolNumeros.filter(numero => !numerosSelecionadosSet.has(numero));
+
+    }
+
+
+    function sorteiaNumeros(numeros, pool,numAposta){
         let pares = 0;
         let impares = 0;
 
-        while (numeros.length < numAposta) {
+        while (numeros.length < numAposta-1) {
             let indicePool = Math.floor(Math.random() * pool.length);
             console.log(`indice:${indicePool}`);
             let num = pool[indicePool];
